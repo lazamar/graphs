@@ -4,10 +4,14 @@
 module Main where
 
 import qualified Data.Array as Array
+import Control.Monad (guard)
 import Control.Monad.ST
 import Data.Array (Array, array, bounds, (!))
 import Data.Bifunctor (second)
+import Data.List (minimumBy)
 import Data.Map (Map)
+import Data.Maybe (mapMaybe)
+import Data.Ord (comparing)
 import Data.STRef
 import Data.Traversable (for)
 
@@ -20,7 +24,10 @@ type Table a            = Array Vertex a
 type Graph e            = Table [(e, Vertex)]
 type Edge e             = (Vertex, e, Vertex)
 type Labelling l        = Vertex -> l
-data LabelledGraph e l  = LabelledGraph (Graph e) (Labelling l)
+data LabelledGraph e l  = LabelledGraph
+    { _graph :: Graph e
+    , _labelling :: Labelling l
+    }
 
 foldG :: Eq result => result -> (Vertex -> [(edge, result)] -> result) -> Graph edge -> Vertex -> result
 foldG startVal f graph root = foldGAll startVal f graph ! root
@@ -95,6 +102,23 @@ reverseE (i, e, v) = (v, e, i)
 reverseEdges :: Graph a -> Graph a
 reverseEdges graph = buildG (Array.bounds graph) $ map reverseE $ edges graph
 
+closure :: Vertex -> Graph a -> Graph a
+closure root graph = _graph $ snd $ unfoldG (\v -> (v, graph ! v)) root
+
+shortestPath :: Graph Int -> Vertex -> Vertex -> Maybe (Int, [Vertex])
+shortestPath graph from to = foldG Nothing f graph from
+    where
+        f vertex children =
+            if vertex == to
+               then Just (0, [to])
+               else guard (not $ null paths) >> Just (minimumBy (comparing fst) paths)
+            where
+                paths =
+                    [ (weight + pweight, vertex:pnodes)
+                    | (weight, Just (pweight, pnodes)) <- children
+                    ]
+
+
 
 showGraphViz (LabelledGraph gr lab)  =
     "digraph name {\n" ++
@@ -106,11 +130,13 @@ showGraphViz (LabelledGraph gr lab)  =
         edges g = [ (v, l, w) | v <- Array.indices g, (l, w) <- g!v ]
 
 
-main = putStr $ showGraphViz $ (`LabelledGraph` id) $ buildG (1,5)
-    [ (1,1,2)
-    , (2,2,3)
-    , (2,2,5)
-    , (3,3,4)
-    , (4,4,5)
-    ]
+main = putStr $ show $ shortestPath graph 1 5
+    where
+        graph = buildG (1,5)
+            [ (1,1,2)
+            , (2,2,3)
+            , (2,2,5)
+            , (3,3,4)
+            , (4,4,5)
+            ]
 
