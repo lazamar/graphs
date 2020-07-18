@@ -113,6 +113,7 @@ shortestPath graph from to = foldG Nothing f graph from
                then Just (0, [to])
                else guard (not $ null paths) >> Just (minimumBy (comparing fst) paths)
             where
+                -- weight of each child's path to the target
                 paths =
                     [ (weight + pweight, vertex:pnodes)
                     | (weight, Just (pweight, pnodes)) <- children
@@ -130,9 +131,38 @@ showGraphViz (LabelledGraph gr lab)  =
         edges g = [ (v, l, w) | v <- Array.indices g, (l, w) <- g!v ]
 
 
-main = putStr $ show $ shortestPath graph 1 5
+main = putStr $ showGraphViz $ (`LabelledGraph` id) undirectedGraph
     where
-        graph = buildG (1,5)
+        undirectedGraph = buildG (1,8)
+            [ (1, 0, 2)
+            , (1, 0, 3)
+            , (1, 0, 4)
+            , (2, 0, 1)
+            , (2, 0, 6)
+            , (3, 0, 1)
+            , (3, 0, 4)
+            , (3, 0, 5)
+            , (3, 0, 6)
+            , (4, 0, 1)
+            , (4, 0, 3)
+            , (4, 0, 5)
+            , (5, 0, 3)
+            , (5, 0, 4)
+            , (5, 0, 6)
+            , (5, 0, 7)
+            , (5, 0, 8)
+            , (6, 0, 2)
+            , (6, 0, 3)
+            , (6, 0, 5)
+            , (6, 0, 7)
+            , (7, 0, 5)
+            , (7, 0, 6)
+            , (7, 0, 8)
+            , (8, 0, 4)
+            , (8, 0, 5)
+            , (8, 0, 7)
+            ]
+        weightedGraph = buildG (1,5)
             [ (1,1,2)
             , (2,2,3)
             , (2,2,5)
