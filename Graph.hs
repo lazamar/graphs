@@ -7,16 +7,19 @@ import qualified Data.Array as Array
 import Control.Monad (guard)
 import Control.Monad.ST
 import Data.Array (Array, array, bounds, (!))
-import Data.Bifunctor (second)
-import Data.List (minimumBy)
+import Data.Bifunctor (second, bimap)
+import Data.List (sortBy, minimumBy, nub)
 import Data.Map (Map)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Ord (comparing)
+import Data.Set (Set)
 import Data.STRef
 import Data.Traversable (for)
+import Debug.Trace
 
 import qualified Data.Map as Map
 import qualified Data.Array as Array
+import qualified Data.Set as Set
 
 type Bounds             = (Int, Int)
 type Vertex             = Int
@@ -93,8 +96,14 @@ buildG b edges = Array.accumArray (flip (:)) [] b [(i, (e, v)) | (i, e, v) <- ed
 edges :: Graph a -> [Edge a]
 edges graph = [ (i, e, v) |  (i, es) <- Array.assocs graph , (e, v) <- es ]
 
+vertices :: Graph a -> [Vertex]
+vertices = Array.indices
+
 reverseE :: Edge a -> Edge a
 reverseE (i, e, v) = (v, e, i)
+
+onGraph :: (Graph a -> Graph a) -> LabelledGraph a b -> LabelledGraph a b
+onGraph f g = g { _graph = f $ _graph g }
 
 -----------------------------------------------------------------------------------------------------
 -- Operations on graphs
@@ -119,7 +128,18 @@ shortestPath graph from to = foldG Nothing f graph from
                     | (weight, Just (pweight, pnodes)) <- children
                     ]
 
+--Strongly connected components
+scc :: Graph a -> [Graph a]
+scc g = ???
+    where
+        f v = filter (\v' -> v' `canReach` v && v `canReach` v') (vertices g)
 
+        canReach from to = to `Set.member` (closures ! from)
+
+        closures = foldGAll mempty reach g
+
+        reach :: Vertex -> [(a, Set Vertex)] -> Set Vertex
+        reach vertex children = Set.singleton vertex <> mconcat (map snd children)
 
 showGraphViz (LabelledGraph gr lab)  =
     "digraph name {\n" ++
@@ -127,16 +147,19 @@ showGraphViz (LabelledGraph gr lab)  =
     where
         showEdge (from, t, to) = show from ++ " -> " ++ show to ++ " [label = \"" ++ show t ++ "\"];\n"
         showNode v = show v ++ " [label = " ++ (show $ lab v) ++ "];\n"
-        edges :: Graph e -> [Edge e]
-        edges g = [ (v, l, w) | v <- Array.indices g, (l, w) <- g!v ]
 
-
-main = putStr $ showGraphViz $ (`LabelledGraph` id) undirectedGraph
+main = putStr $ showGraphViz $ (`LabelledGraph` id) $ bigG
     where
-        undirectedGraph = buildG (1,8)
-            [ (1, 0, 2)
+        direct (from,w,to) =
+            if from < to
+               then (from,w,to)
+               else (to,w,from)
+
+        bigG
+          = buildG (1,8)
+          $ [ (1, 0, 2)
             , (1, 0, 3)
-            , (1, 0, 4)
+            , (1, -1, 4)
             , (2, 0, 1)
             , (2, 0, 6)
             , (3, 0, 1)
@@ -152,7 +175,7 @@ main = putStr $ showGraphViz $ (`LabelledGraph` id) undirectedGraph
             , (5, 0, 7)
             , (5, 0, 8)
             , (6, 0, 2)
-            , (6, 0, 3)
+            , (6, -1, 3)
             , (6, 0, 5)
             , (6, 0, 7)
             , (7, 0, 5)
@@ -160,8 +183,9 @@ main = putStr $ showGraphViz $ (`LabelledGraph` id) undirectedGraph
             , (7, 0, 8)
             , (8, 0, 4)
             , (8, 0, 5)
-            , (8, 0, 7)
+            , (8, 2, 7)
             ]
+
         weightedGraph = buildG (1,5)
             [ (1,1,2)
             , (2,2,3)
