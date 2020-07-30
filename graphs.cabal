@@ -1,0 +1,73 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 460e12473c7d4cd1324213efca65b72154d32a6dcb44db75aa0584ba4cafa9e2
+
+name:           graphs
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/graphs#readme>
+homepage:       https://github.com/githubuser/graphs#readme
+bug-reports:    https://github.com/githubuser/graphs/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2020 Author name here
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/graphs
+
+library
+  exposed-modules:
+      Graph
+      GraphLoops
+  other-modules:
+      Paths_graphs
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , containers
+    , heaps
+  default-language: Haskell2010
+
+executable graphs-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_graphs
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -Wall -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , containers
+    , graphs
+    , heaps
+  default-language: Haskell2010
+
+test-suite graphs-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_graphs
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , containers
+    , graphs
+    , heaps
+  default-language: Haskell2010

@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Main where
+module GraphLoops where
 
 import qualified Data.Array as Array
 import Control.Monad (guard)
@@ -127,19 +127,6 @@ shortestPath graph from to = foldG Nothing f graph from
                     [ (weight + pweight, vertex:pnodes)
                     | (weight, Just (pweight, pnodes)) <- children
                     ]
-
---Strongly connected components
-scc :: Graph a -> [Graph a]
-scc g = ???
-    where
-        f v = filter (\v' -> v' `canReach` v && v `canReach` v') (vertices g)
-
-        canReach from to = to `Set.member` (closures ! from)
-
-        closures = foldGAll mempty reach g
-
-        reach :: Vertex -> [(a, Set Vertex)] -> Set Vertex
-        reach vertex children = Set.singleton vertex <> mconcat (map snd children)
 
 showGraphViz (LabelledGraph gr lab)  =
     "digraph name {\n" ++
