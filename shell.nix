@@ -5,13 +5,8 @@ let
     # Commands
     commands = {
       plot = pkgs.writeShellScriptBin "plot" ''
-        stack runghc Graph.hs | dot -Tpng > image.png
+        stack run --silent | dot -Tpng > image.png
         open image.png
-        '';
-
-      plotdfs = pkgs.writeShellScriptBin "plotdfs" ''
-        stack runghc GraphDFS.hs | dot -Tpng > image-dfs.png
-        open image-dfs.png
         '';
     };
 in
@@ -22,6 +17,5 @@ pkgs.stdenv.mkDerivation {
       [
         pkgs.graphviz
         commands.plot
-        commands.plotdfs
       ];
 }
