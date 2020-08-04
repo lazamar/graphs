@@ -7,6 +7,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
+{- Graph algorithms using depth-first search
+    Timing variables mean:
+        n - number of vertice + number of edges
+        e - number of edges
+        v - number of vertices
+-}
 module Graph where
 
 import Control.Monad (foldM, forM, unless)
@@ -18,9 +24,10 @@ import Data.Bifunctor (second)
 import Data.Foldable (find, fold)
 import Data.Function (on)
 import Data.Heap (Heap)
-import Data.List (minimumBy)
+import Data.List (foldl', minimumBy)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (listToMaybe)
+import Data.Monoid (Endo (..))
 import Data.STRef
 import Data.Set (Set)
 import Data.Traversable (for)
@@ -55,11 +62,24 @@ data Tree a = Node a [Tree a]
 type Forest = [Tree Vertex]
 
 ---------------------------------------------------------
+-- Difference list.
+-- Allows appending multiple lists together in linear time.
+type DList a = Endo [a]
+
+cons :: a -> DList a -> DList a
+cons v (Endo l) = Endo $ (v :) . l
+
+toList :: DList a -> [a]
+toList = flip appEndo []
+
+---------------------------------------------------------
 -- Utilities
 
+-- | O(n)
 vertices :: Graph e -> [Vertex]
 vertices = Array.indices
 
+-- | O(n)
 edges :: Graph e -> [Edge e]
 edges g =
     [ (v , e , t)
@@ -71,14 +91,17 @@ edges g =
 successors :: Graph a -> Vertex -> [(a , Vertex)]
 successors g v = g ! v
 
+-- | O(n)
 reverseE :: Graph e -> [Edge e]
 reverseE = map rev . edges
     where
         rev (v , e , t) = (t , e , v)
 
+-- | O(1)
 bounds :: Graph e -> Bounds
 bounds = Array.bounds
 
+-- | O(n log n)
 buildWithLabels :: [LabelledEdge e] -> Labelled e
 buildWithLabels labelled = Labelled (toLabel , toVertex) $ buildG' unlabelled
     where
@@ -88,12 +111,15 @@ buildWithLabels labelled = Labelled (toLabel , toVertex) $ buildG' unlabelled
         labels = fold [Set.singleton from <> Set.singleton to | (from , e , to) <- labelled]
 
 -- | build a graph from a list of edges
+-- O(n)
 buildG :: Bounds -> [Edge a] -> Graph a
 buildG b es = Array.accumArray (flip (:)) [] b [(i , (e , v)) | (i , e , v) <- es]
 
+-- | O(n)
 buildG' :: [Edge a] -> Graph a
 buildG' es = buildG (boundsFromEdges es) es
 
+-- | O(n)
 boundsFromEdges :: [Edge a] -> Bounds
 boundsFromEdges es = (minimum vs , maximum vs)
     where
@@ -107,6 +133,7 @@ generate :: Graph e -> Vertex -> Tree Vertex
 generate g v = Node v $ map (generate g . snd) (g ! v)
 
 -- | Prune a forest in a depth-first way, removing visited nodes
+-- O(v log v)
 prune :: Forest -> Forest
 prune aforest = runST $ do
     visitedRef <- newSTRef (mempty :: Set Vertex)
@@ -152,41 +179,54 @@ foldGAll startVal f graph = runSTArray $ do
 ---------------------------------------------------------
 --  Algorithms
 
+-- | O(n)
 transpose :: Graph a -> Graph a
 transpose = buildG' . reverseE
 
+-- | O(n)
 outdegree :: Graph a -> Table Int
 outdegree = fmap length
 
+-- | O(n)
 indegree :: Graph a -> Table Int
 indegree = outdegree . transpose
 
+-- | O(n)
 undirected :: Graph a -> Graph a
 undirected g = buildG' $ edges g ++ reverseE g
 
 -- | Depth-first search over specific vertices
+-- O(e log v)
 dfs :: Graph e -> [Vertex] -> Forest
 dfs g vs = prune $ map (generate g) vs
 
+-- O(e log v)
 dff :: Graph e -> Forest
 dff g = dfs g (reverse $ vertices g)
 
+-- O(e log v)
 preorder :: Graph a -> [Vertex]
-preorder = concatMap pre . dff
+preorder = toList . foldMap pre . dff
     where
-        pre (Node v children) = v : concatMap pre children
+        -- linear
+        pre (Node v children) = cons v $ foldMap pre children
 
+-- O(e log v)
 postorder :: Graph a -> [Vertex]
-postorder = concatMap post . dff
+postorder = toList . foldMap post . dff
     where
-        post (Node v children) = concatMap post children ++ [v]
+        -- linear
+        post (Node v children) = foldMap post children <> cons v mempty
 
+-- O(e log v)
 topologicalSort :: Graph e -> [Vertex]
 topologicalSort = reverse . postorder
 
+-- O(e log v)
 scc :: Graph a -> Forest
 scc g = dfs g (postorder g)
 
+-- O(e log v)
 components :: Graph a -> Forest
 components = dff . undirected
 
@@ -297,3 +337,5 @@ shortestPath' from to graph = pathsTo' to graph ! from
 
 allShortestPathsFrom' :: Vertex -> Graph Int -> Table (Maybe [Vertex])
 allShortestPathsFrom' from = pathsTo' from . transpose
+
+---
