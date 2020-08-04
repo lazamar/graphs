@@ -4,6 +4,7 @@ import Control.Monad (guard)
 import Control.Monad.ST
 import Data.Array (Array, array, (!))
 import Data.Bifunctor (bimap, second)
+import Data.Char (chr, ord)
 import Data.Heap (Heap)
 import Data.List (minimumBy, nub, sortBy)
 import Data.List.NonEmpty (NonEmpty)
@@ -22,13 +23,45 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 
-main :: IO ()
-main =
-    -- putStrLn $ visualiseGraph Nothing False $ Labelled kwLabel kwGraph
-    print $
-        fmap (map kwLabel) $
-            shortestPath' (kwVertex "a") (kwVertex "i") kwGraph
+-- | Create a graph with `size` nodes and size/4 edges.
+randomG size =
+    buildWithLabels
+        . keepEveryOther 4
+        . ( \labels ->
+                [ ( pure $ chr from
+                  , 1 + 2 * from + to
+                  , pure $ chr to
+                  )
+                | from <- labels
+                , to <- labels
+                ]
+          )
+        $ [65 .. 65 + size]
+
+keepEveryOther factor list =
+    [ val
+    | (ix , val) <- zip [0 ..] list
+    , ix `mod` factor /= 0
+    ]
+
+allPathsFrom from size getPath =
+    [ getPath from to g
+    | to <- vertices g
+    ]
     where
+        Labelled _ g = randomG size
+
+aPath size getPath = getPath 0 (size - 1) g
+    where
+        Labelled _ g = randomG size
+
+main :: IO ()
+main = putStrLn $ visualiseGraph Nothing False $ randomG 8
+    where
+        --print $
+        --fmap (map kwLabel) $
+        --shortestPath' (kwVertex "a") (kwVertex "i") kwGraph
+
         Labelled (kwLabel , kwVertex) kwGraph =
             buildWithLabels
                 [ ("a" , 1 , "g")

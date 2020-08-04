@@ -28,7 +28,6 @@ source-repository head
 library
   exposed-modules:
       Graph
-      GraphLoops
   other-modules:
       Paths_graphs
   hs-source-dirs:
@@ -67,6 +66,23 @@ test-suite graphs-test
   build-depends:
       array
     , base >=4.7 && <5
+    , containers
+    , graphs
+    , heaps
+  default-language: Haskell2010
+
+benchmark graphs-bench
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+      Paths_graphs
+  hs-source-dirs:
+      bench
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , criterion
     , containers
     , graphs
     , heaps

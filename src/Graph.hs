@@ -1,4 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -11,7 +15,7 @@ import Data.Array (Array, (!))
 import Data.Array.MArray (MArray)
 import Data.Array.ST (STArray, runSTArray)
 import Data.Bifunctor (second)
-import Data.Foldable (fold)
+import Data.Foldable (find, fold)
 import Data.Function (on)
 import Data.Heap (Heap)
 import Data.List (minimumBy)
@@ -45,9 +49,10 @@ data Labelled e = Labelled
     , _graph :: Graph e
     }
 
-data Tree = Node Vertex Forest deriving (Show)
+data Tree a = Node a [Tree a]
+    deriving (Show , Functor , Foldable , Traversable)
 
-type Forest = [Tree]
+type Forest = [Tree Vertex]
 
 ---------------------------------------------------------
 -- Utilities
@@ -98,7 +103,7 @@ boundsFromEdges es = (minimum vs , maximum vs)
 -- Base operations
 
 -- | Create a possibly infinite Tree departing from a graph's node
-generate :: Graph e -> Vertex -> Tree
+generate :: Graph e -> Vertex -> Tree Vertex
 generate g v = Node v $ map (generate g . snd) (g ! v)
 
 -- | Prune a forest in a depth-first way, removing visited nodes
@@ -211,36 +216,47 @@ pathWeight = snd . NonEmpty.head . unPath
 pathTarget :: Path e -> Vertex
 pathTarget = fst . NonEmpty.head . unPath
 
+toPlainPath :: Path e -> [Vertex]
+toPlainPath = reverse . map fst . NonEmpty.toList . unPath
+
 instance Eq e => Eq (Path e) where
     (==) = (==) `on` pathWeight
 
 instance Ord e => Ord (Path e) where
     compare = compare `on` pathWeight
 
-shortestPath :: Real e => Vertex -> Vertex -> Graph e -> Maybe [Vertex]
+shortestPath :: Vertex -> Vertex -> Graph Int -> Maybe [Vertex]
 shortestPath from to =
-    fmap (map fst . NonEmpty.toList . unPath)
+    fmap toPlainPath
         . listToMaybe
         . filter ((to ==) . pathTarget)
         . pathsFrom from
 
+allShortestPathsFrom :: Vertex -> Graph Int -> Table (Maybe [Vertex])
+allShortestPathsFrom from graph =
+    Array.listArray
+        (bounds graph)
+        [ fmap toPlainPath $ find ((target ==) . pathTarget) paths
+        | target <- [ix0 .. ixn]
+        ]
+    where
+        (ix0 , ixn) = bounds graph
+        paths = pathsFrom from graph
+
 -- | Get weighted paths from origin sorted by weight
 -- Includes paths from all nodes in the graph
-pathsFrom
-    :: forall e. Real e
-    => Vertex
-    -> Graph e
-    -> [Path e]
-pathsFrom origin graph = dijkstra mempty $ Heap.singleton $ Path ((origin , 0 :: e) :| mempty)
+pathsFrom :: Vertex -> Graph Int -> [Path Int]
+pathsFrom origin graph = dijkstra mempty $ Heap.singleton $ Path ((origin , 0) :| mempty)
     where
-        dijkstra :: Set Vertex -> Heap (Path e) -> [Path e]
+        dijkstra :: Set Vertex -> Heap (Path Int) -> [Path Int]
         dijkstra visited paths = case Heap.viewMin paths of
             Nothing -> []
             Just (shortest , others) ->
                 let visited' = Set.insert (pathTarget shortest) visited
                     newPaths = foldMap Heap.singleton (extendPath visited' shortest)
                  in shortest : dijkstra visited' (others <> newPaths)
-        extendPath :: Set Vertex -> Path e -> [Path e]
+
+        extendPath :: Set Vertex -> Path Int -> [Path Int]
         extendPath visited p =
             map addEdge $
                 filter (not . (`Set.member` visited) . snd) $
@@ -249,17 +265,35 @@ pathsFrom origin graph = dijkstra mempty $ Heap.singleton $ Path ((origin , 0 ::
                 pathCons node = Path . NonEmpty.cons node . unPath
                 addEdge (e , v) = pathCons (v , e + pathWeight p) p
 
+newtype P = P {unP :: (Int , [Vertex] , Set Vertex)}
+
+instance Eq P where
+    P (w0 , _ , _) == P (w1 , _ , _) = w0 == w1
+
 -- | Djikstra's shortest path using fixpoint function
-shortestPath' :: forall e. Real e => Vertex -> Vertex -> Graph e -> Maybe [Vertex]
-shortestPath' from to graph = fmap snd $ foldGAll Nothing f graph ! from
+--
+-- The paths form an inverted tree, therefore have a very
+-- compact representation.
+pathsTo' :: Vertex -> Graph Int -> Table (Maybe [Vertex])
+pathsTo' to graph = fmap (fmap path) $ foldGAll Nothing f graph
     where
-        f :: Vertex -> [(e , Maybe (e , [Vertex]))] -> Maybe (e , [Vertex])
+        path (P (_ , p , _)) = p
+
+        f :: Vertex -> [(Int , Maybe P)] -> Maybe P
         f vertex successors
-            | vertex == to = Just (0 , [vertex])
-            | not (null paths) = Just $ minimumBy (compare `on` fst) paths
+            | vertex == to = Just $ P (0 , [vertex] , mempty)
+            | not (null paths) = Just $ P $ minimumBy (compare `on` weight) paths
             | otherwise = Nothing
             where
+                weight (w , _ , _) = w
                 paths =
-                    [ (cost + edge , vertex : path)
-                    | (cost , Just (edge , path)) <- successors
+                    [ (cost + edge , vertex : path , Set.insert vertex members)
+                    | (cost , Just (P (edge , path , members))) <- successors
+                    , not $ vertex `Set.member` members
                     ]
+
+shortestPath' :: Vertex -> Vertex -> Graph Int -> Maybe [Vertex]
+shortestPath' from to graph = pathsTo' to graph ! from
+
+allShortestPathsFrom' :: Vertex -> Graph Int -> Table (Maybe [Vertex])
+allShortestPathsFrom' from = pathsTo' from . transpose
